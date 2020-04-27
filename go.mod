@@ -1,4 +1,4 @@
-module common-go
+module github.com/zhnxin/common-go
 
 go 1.12
 
