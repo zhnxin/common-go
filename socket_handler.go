@@ -38,6 +38,16 @@ func NewUnixSocketServer(sockerFile string) *UnixSocketServer {
 	return &UnixSocketServer{
 		sockerFile:    sockerFile,
 		socketHandler: defaultsocketHandler,
+		signalHandlerFunc: map[string]UnixSocketHandler{
+			"status": func(s *UnixSocketServer, c net.Conn) error {
+				_, err := fmt.Fprintf(c, "running:%d", os.Getpid())
+				return err
+			},
+			"stop": func(s *UnixSocketServer, c net.Conn) error {
+				_, err := fmt.Fprintf(c, "stop:%d", os.Getpid())
+				return err
+			},
+		},
 	}
 }
 
@@ -51,10 +61,38 @@ func NewUnixSocketServerWith(sockerFile string, socketHandler UnixSocketHandler)
 type UnixSocketHandler func(*UnixSocketServer, net.Conn) error
 
 type UnixSocketServer struct {
-	sockerFile    string
-	cannel        context.CancelFunc
-	socketHandler func(*UnixSocketServer, net.Conn) error
-	stopCtx       context.Context
+	sockerFile        string
+	cannel            context.CancelFunc
+	socketHandler     UnixSocketHandler
+	signalHandlerFunc map[string]UnixSocketHandler
+	stopCtx           context.Context
+}
+
+func (s *UnixSocketServer) defaultsocketHandler(_ *UnixSocketServer, c net.Conn) error {
+	for {
+		buf := make([]byte, 512)
+		nr, err := c.Read(buf)
+		if err != nil {
+			return nil
+		}
+
+		data := buf[0:nr]
+		fn, ok := s.signalHandlerFunc[string(data)]
+		if ok {
+			err = fn(s, c)
+		} else {
+			_, err = fmt.Fprintf(c, "invalid signal")
+		}
+		if err != nil {
+			return err
+		}
+	}
+}
+func (s *UnixSocketServer) SetSignalHandlerFunc(signal string, fn UnixSocketHandler) {
+	if s.signalHandlerFunc == nil {
+		panic("SetSignalHandlerFunc is diabled while using custom socketHandler")
+	}
+	s.signalHandlerFunc[signal] = fn
 }
 
 func (s *UnixSocketServer) Listen() (err error) {
