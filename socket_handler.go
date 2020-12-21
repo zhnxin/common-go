@@ -7,49 +7,26 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 )
 
-func defaultsocketHandler(s *UnixSocketServer, c net.Conn) error {
-	for {
-		buf := make([]byte, 512)
-		nr, err := c.Read(buf)
-		if err != nil {
-			return nil
-		}
-
-		data := buf[0:nr]
-		switch string(data) {
-		case "status":
-			_, err = fmt.Fprintf(c, "running:%d", os.Getpid())
-		case "stop":
-			_, err = fmt.Fprintf(c, "stop:%d", os.Getpid())
-			s.cannel()
-		default:
-			_, err = fmt.Fprintf(c, "invalid signal")
-		}
-		if err != nil {
-			return err
-		}
-	}
-}
-
 func NewUnixSocketServer(sockerFile string) *UnixSocketServer {
 	s := &UnixSocketServer{
-		sockerFile:    sockerFile,
-		socketHandler: defaultsocketHandler,
-		signalHandlerFunc: map[string]UnixSocketHandler{
-			"status": func(s *UnixSocketServer, c net.Conn) error {
+		sockerFile: sockerFile,
+		signalHandlerFunc: map[string]DefaultUnixSocketHandler{
+			"status": func(s *UnixSocketServer, c net.Conn, _ ...string) error {
 				_, err := fmt.Fprintf(c, "running:%d", os.Getpid())
-				return err
-			},
-			"stop": func(s *UnixSocketServer, c net.Conn) error {
-				_, err := fmt.Fprintf(c, "stop:%d", os.Getpid())
 				return err
 			},
 		},
 	}
 	s.socketHandler = s.defaultsocketHandler
+	s.SetSignalHandlerFunc("stop", func(is *UnixSocketServer, c net.Conn, _ ...string) error {
+		_, err := fmt.Fprintf(c, "stop:%d", os.Getpid())
+		is.cannel()
+		return err
+	})
 	return s
 }
 
@@ -61,12 +38,13 @@ func NewUnixSocketServerWith(sockerFile string, socketHandler UnixSocketHandler)
 }
 
 type UnixSocketHandler func(*UnixSocketServer, net.Conn) error
+type DefaultUnixSocketHandler func(*UnixSocketServer, net.Conn, ...string) error
 
 type UnixSocketServer struct {
 	sockerFile        string
 	cannel            context.CancelFunc
 	socketHandler     UnixSocketHandler
-	signalHandlerFunc map[string]UnixSocketHandler
+	signalHandlerFunc map[string]DefaultUnixSocketHandler
 	stopCtx           context.Context
 }
 
@@ -79,9 +57,10 @@ func (s *UnixSocketServer) defaultsocketHandler(_ *UnixSocketServer, c net.Conn)
 		}
 
 		data := buf[0:nr]
-		fn, ok := s.signalHandlerFunc[string(data)]
+		signals := strings.Split(string(data), " ")
+		fn, ok := s.signalHandlerFunc[signals[0]]
 		if ok {
-			err = fn(s, c)
+			err = fn(s, c, signals[1:]...)
 		} else {
 			_, err = fmt.Fprintf(c, "invalid signal")
 		}
@@ -90,7 +69,7 @@ func (s *UnixSocketServer) defaultsocketHandler(_ *UnixSocketServer, c net.Conn)
 		}
 	}
 }
-func (s *UnixSocketServer) SetSignalHandlerFunc(signal string, fn UnixSocketHandler) {
+func (s *UnixSocketServer) SetSignalHandlerFunc(signal string, fn DefaultUnixSocketHandler) {
 	if s.signalHandlerFunc == nil {
 		panic("SetSignalHandlerFunc is diabled while using custom socketHandler")
 	}
