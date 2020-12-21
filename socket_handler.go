@@ -35,7 +35,7 @@ func defaultsocketHandler(s *UnixSocketServer, c net.Conn) error {
 }
 
 func NewUnixSocketServer(sockerFile string) *UnixSocketServer {
-	return &UnixSocketServer{
+	s := &UnixSocketServer{
 		sockerFile:    sockerFile,
 		socketHandler: defaultsocketHandler,
 		signalHandlerFunc: map[string]UnixSocketHandler{
@@ -49,6 +49,8 @@ func NewUnixSocketServer(sockerFile string) *UnixSocketServer {
 			},
 		},
 	}
+	s.socketHandler = s.defaultsocketHandler
+	return s
 }
 
 func NewUnixSocketServerWith(sockerFile string, socketHandler UnixSocketHandler) *UnixSocketServer {
