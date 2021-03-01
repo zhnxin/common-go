@@ -142,7 +142,7 @@ func (s *Schedule) run() {
 						break
 					} else {
 						s.list.Remove(0)
-						s.valueChan <- spot.v
+						go func() { s.valueChan <- spot.v }()
 					}
 				}
 			}
