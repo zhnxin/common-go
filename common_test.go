@@ -11,6 +11,9 @@ func TestSchedule(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		schedule.Add(time.Now().Add(3*time.Second), fmt.Sprint(i))
 	}
+	for _, v := range schedule.GetSchedule() {
+		t.Log(v.T, v.Item)
+	}
 	time.Sleep(time.Second)
 	schedule.Add(time.Now().Add(time.Second), "extra")
 	go func() {
