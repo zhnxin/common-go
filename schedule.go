@@ -129,16 +129,20 @@ func (s *Schedule) run() {
 				}
 			}
 		} else {
+			ctx, cannel := context.WithDeadline(context.Background(), nextSpot)
 			select {
 			case <-s.ctx.Done():
+				cannel()
 				return
 			case spot := <-s.spotChan:
+				cannel()
 				if spot.T.IsZero() {
 					s.remove(spot.Item)
 				} else {
 					s.add(spot)
 				}
-			case <-time.After(time.Until(nextSpot)):
+			case <-ctx.Done():
+				cannel()
 				for {
 					spot, ok := s.FirstSpot()
 					if !ok || spot.T.After(nextSpot) {
