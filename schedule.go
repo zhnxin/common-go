@@ -116,6 +116,7 @@ func (s *Schedule) run() {
 	var cannel context.CancelFunc
 	s.runCtx, cannel = context.WithCancel(context.Background())
 	defer cannel()
+	freshTicker := time.NewTicker(time.Hour)
 	for {
 		if nextSpot.IsZero() {
 			select {
@@ -152,6 +153,7 @@ func (s *Schedule) run() {
 						go func() { s.valueChan <- spot.Item }()
 					}
 				}
+			case <-freshTicker.C:
 			}
 		}
 		nextSpot, _ = s.first()
